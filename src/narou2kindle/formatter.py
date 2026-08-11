@@ -10,12 +10,13 @@ from .richtext import RichLine
 _SCENE_BREAK_RE = re.compile(r"^(?:[◇♢◆□■△▲▽▼＊*#]+|[―—─\-]{3,})$")
 _DIALOGUE_PREFIXES = ("「", "『", "（", "【", "〈", "《")
 _SPEAKER_LABEL_RE = re.compile(r"^(?:\{[^{}\r\n]+\}|｛[^｛｝\r\n]+｝)\s*")
+_BARE_SPEAKER_DIALOGUE_RE = re.compile(r"^[^\s「『（【〈《]{1,32}[「『（【〈《]")
 
 
 def _is_dialogue(text: str) -> bool:
-    """Recognize dialogue with an optional Hameln-style speaker label."""
+    """Recognize dialogue with an optional speaker label."""
     without_label = _SPEAKER_LABEL_RE.sub("", text, count=1)
-    return without_label.startswith(_DIALOGUE_PREFIXES)
+    return without_label.startswith(_DIALOGUE_PREFIXES) or bool(_BARE_SPEAKER_DIALOGUE_RE.match(text))
 
 
 def format_blocks(
