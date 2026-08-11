@@ -46,3 +46,15 @@ def test_section_break_waits_until_a_dialogue_run_ends():
         ("", "blank"),
         ("続く地の文。", "prose"),
     ]
+
+
+def test_speaker_label_followed_by_dialogue_is_a_dialogue_block():
+    blocks = format_blocks(["地の文。", "{アリス}「最初の台詞。」", "{ボブ}「次の台詞。」", "地の文。"], section_length=1)
+    assert [(block.text, block.kind) for block in blocks] == [
+        ("地の文。", "prose"),
+        ("", "blank"),
+        ("{アリス}「最初の台詞。」", "dialogue"),
+        ("{ボブ}「次の台詞。」", "dialogue"),
+        ("", "blank"),
+        ("地の文。", "prose"),
+    ]
