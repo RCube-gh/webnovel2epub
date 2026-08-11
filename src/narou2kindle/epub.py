@@ -5,7 +5,10 @@ import uuid
 import zipfile
 from datetime import date
 from html import escape
+from io import BytesIO
 from pathlib import Path
+
+from PIL import Image
 
 from .models import Episode, Novel, TextBlock
 
@@ -17,6 +20,28 @@ _COVER_MEDIA_TYPES = {
     ".gif": "image/gif",
     ".webp": "image/webp",
 }
+
+
+def _cover_asset(cover_path: Path) -> tuple[str, str, bytes]:
+    """Return a Kindle-compatible cover asset from a user-supplied image."""
+    suffix = cover_path.suffix.lower()
+    media_type = _COVER_MEDIA_TYPES.get(suffix)
+    if not media_type:
+        supported = ", ".join(_COVER_MEDIA_TYPES)
+        raise ValueError(f"Unsupported cover image type. Use one of: {supported}")
+    if suffix != ".webp":
+        return f"cover{suffix}", media_type, cover_path.read_bytes()
+
+    try:
+        with Image.open(cover_path) as image:
+            rgba = image.convert("RGBA")
+            converted = Image.new("RGB", rgba.size, "white")
+            converted.paste(rgba, mask=rgba.getchannel("A"))
+            buffer = BytesIO()
+            converted.save(buffer, format="JPEG", quality=95)
+    except OSError as exc:
+        raise ValueError(f"Could not convert WebP cover to JPEG: {exc}") from exc
+    return "cover.jpg", "image/jpeg", buffer.getvalue()
 
 
 def safe_filename(value: str) -> str:
@@ -68,17 +93,11 @@ def write_epub(
     if writing_mode not in {"vertical", "horizontal"}:
         raise ValueError("writing_mode must be 'vertical' or 'horizontal'")
     destination.parent.mkdir(parents=True, exist_ok=True)
-    cover_media_type = None
-    cover_filename = None
-    cover_data = None
+    cover_media_type: str | None = None
+    cover_filename: str | None = None
+    cover_data: bytes | None = None
     if cover_path:
-        suffix = cover_path.suffix.lower()
-        cover_media_type = _COVER_MEDIA_TYPES.get(suffix)
-        if not cover_media_type:
-            supported = ", ".join(_COVER_MEDIA_TYPES)
-            raise ValueError(f"Unsupported cover image type. Use one of: {supported}")
-        cover_filename = f"cover{suffix}"
-        cover_data = cover_path.read_bytes()
+        cover_filename, cover_media_type, cover_data = _cover_asset(cover_path)
     book_id = f"urn:uuid:{uuid.uuid4()}"
     chapter_files = [f"chapter-{index:04}.xhtml" for index in range(1, len(novel.episodes) + 1)]
     nav_items = _navigation_items(novel.episodes, chapter_files)

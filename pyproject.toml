@@ -3,7 +3,7 @@ name = "narou2kindle"
 version = "0.1.0"
 description = "CLI for converting web novels into EPUB 3 files"
 requires-python = ">=3.11"
-dependencies = ["beautifulsoup4>=4.12"]
+dependencies = ["beautifulsoup4>=4.12", "Pillow>=10.0"]
 
 [project.scripts]
 narou2kindle = "narou2kindle.cli:main"

@@ -1,5 +1,7 @@
 import zipfile
 
+from PIL import Image
+
 from narou2kindle.epub import write_epub
 from narou2kindle.models import Episode, Novel, TextBlock
 
@@ -82,3 +84,15 @@ def test_writes_horizontal_ltr_epub(tmp_path):
         css = archive.read("OEBPS/style.css")
         assert b"writing-mode: horizontal-tb" in css
         assert b"column-count" not in css
+
+
+def test_converts_webp_cover_to_jpeg_for_kindle_compatibility(tmp_path):
+    cover = tmp_path / "cover.webp"
+    Image.new("RGBA", (4, 6), (255, 0, 0, 128)).save(cover, "WEBP")
+    novel = Novel("N1", "Title", "Author", "", "https://example.test/", [Episode("First", [TextBlock("Text")])])
+    output = write_epub(novel, tmp_path / "book.epub", cover)
+    with zipfile.ZipFile(output) as archive:
+        package = archive.read("OEBPS/content.opf")
+        assert b'images/cover.jpg' in package
+        assert b'media-type="image/jpeg"' in package
+        assert archive.read("OEBPS/images/cover.jpg").startswith(b"\xff\xd8\xff")

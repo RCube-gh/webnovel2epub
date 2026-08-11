@@ -7,7 +7,7 @@ A small CLI that converts public novels from Shosetsuka ni Naro, Nocturne Novels
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install beautifulsoup4
+python -m pip install -e .
 ```
 
 ## Usage
@@ -29,7 +29,7 @@ python .\run.py https://ncode.syosetu.com/n4298mo/ --paragraph-length 220 --sect
 python .\run.py https://ncode.syosetu.com/n4298mo/ --section-length 0
 ```
 
-The first readable page is a linked table of contents. To include a cover, pass an image file (JPG, PNG, GIF, or WebP):
+The first readable page is a linked table of contents. To include a cover, pass an image file (JPG, PNG, GIF, or WebP). WebP covers are automatically converted to JPEG inside the EPUB for Kindle compatibility:
 
 ```powershell
 python .\run.py https://ncode.syosetu.com/n4298mo/ --cover .\cover.jpg
