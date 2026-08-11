@@ -1,0 +1,16 @@
+[project]
+name = "narou2kindle"
+version = "0.1.0"
+description = "CLI for converting web novels into EPUB 3 files"
+requires-python = ">=3.11"
+dependencies = ["beautifulsoup4>=4.12"]
+
+[project.scripts]
+narou2kindle = "narou2kindle.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
