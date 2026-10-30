@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import time
 from dataclasses import dataclass
-from urllib.parse import urljoin, urlparse
+from urllib.parse import parse_qs, urljoin, urlparse
 from urllib.request import Request, urlopen
 
 from bs4 import BeautifulSoup, Tag
@@ -78,13 +78,38 @@ class NarouExtractor:
         title = _first_text(soup, ".novel_title", ".p-novel__title", "h1") or source.code
         author = _first_text(soup, ".novel_writername", ".p-novel__author", ".p-author__name") or ""
         synopsis = "\n".join(_text_lines(soup.select_one("#novel_ex")))
-        episodes = _episode_refs(soup, source)
+        episodes = self._all_episode_refs(soup, source)
         if not episodes:
             if soup.select_one("#novel_honbun, .p-novel__body"):
                 episodes = [EpisodeRef(1, title, source.base_url)]
             else:
                 raise ExtractionError("Could not find the episode list. The site's HTML may have changed.")
         return title, author, synopsis, episodes
+
+    def _all_episode_refs(self, first_page: BeautifulSoup, source: NarouUrl) -> list[EpisodeRef]:
+        """Collect every page of a paginated episode list."""
+        episodes: list[EpisodeRef] = []
+        seen_episode_urls: set[str] = set()
+        seen_page_urls = {source.base_url}
+        page_soup = first_page
+        page_url = source.base_url
+        chapter: str | None = None
+
+        while True:
+            page_refs, chapter = _episode_refs_page(page_soup, source, chapter)
+            for ref in page_refs:
+                if ref.url not in seen_episode_urls:
+                    seen_episode_urls.add(ref.url)
+                    episodes.append(ref)
+
+            next_page_url = _next_episode_list_page(page_soup, source, page_url)
+            if next_page_url is None or next_page_url in seen_page_urls:
+                break
+            seen_page_urls.add(next_page_url)
+            page_url = next_page_url
+            page_soup = BeautifulSoup(self._fetch(page_url), "html.parser")
+
+        return sorted(episodes, key=lambda ref: ref.number)
 
     def download(
         self,
@@ -130,9 +155,15 @@ def _first_text(soup: BeautifulSoup, *selectors: str) -> str:
 
 
 def _episode_refs(soup: BeautifulSoup, source: NarouUrl) -> list[EpisodeRef]:
+    return _episode_refs_page(soup, source)[0]
+
+
+def _episode_refs_page(
+    soup: BeautifulSoup, source: NarouUrl, initial_chapter: str | None = None
+) -> tuple[list[EpisodeRef], str | None]:
     refs: list[EpisodeRef] = []
     seen: set[str] = set()
-    chapter: str | None = None
+    chapter = initial_chapter
     href_pattern = re.compile(rf"/{re.escape(source.code.lower())}/(\d+)/?$")
     for element in soup.find_all(["div", "a"]):
         classes = " ".join(element.get("class", []))
@@ -152,4 +183,20 @@ def _episode_refs(soup: BeautifulSoup, source: NarouUrl) -> list[EpisodeRef]:
         seen.add(episode_url)
         title = element.get_text(" ", strip=True) or f"Episode {match.group(1)}"
         refs.append(EpisodeRef(int(match.group(1)), title, episode_url, chapter))
-    return refs
+    return refs, chapter
+
+
+def _next_episode_list_page(soup: BeautifulSoup, source: NarouUrl, current_url: str) -> str | None:
+    """Return the pager's next link only when it belongs to this novel."""
+    current_page = int(parse_qs(urlparse(current_url).query).get("p", ["1"])[0])
+    source_path = urlparse(source.base_url).path.rstrip("/")
+    for link in soup.select("a.c-pager__item--next[href]"):
+        target = urljoin(current_url, link["href"])
+        parsed = urlparse(target)
+        if parsed.hostname != urlparse(source.base_url).hostname or parsed.path.rstrip("/") != source_path:
+            continue
+        page_values = parse_qs(parsed.query).get("p", [])
+        if len(page_values) != 1 or not page_values[0].isdigit() or int(page_values[0]) <= current_page:
+            continue
+        return target
+    return None
